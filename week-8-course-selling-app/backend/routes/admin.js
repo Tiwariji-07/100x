@@ -2,10 +2,11 @@ const express = require("express");
 const router = express.Router();
 const adminAuth = require("../middlewares/adminAuth");
 const AdminModel = require("../models/Admin");
+const CourseModel = require("../models/Course");
 const bcrypt = require("bcrypt");
 const { z } = require("zod");
 const jwt = require("jsonwebtoken");
-const jwtSecret = process.env.JWT_SECRET;
+const jwtSecret = process.env.JWT_ADMIN_SECRET;
 
 const adminSchema = z.object({
   email: z.string().email(),
@@ -17,6 +18,21 @@ const adminSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+});
+
+const createCourseSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  price: z.number(),
+  imageUrl: z.string(),
+  // _id: z.string().or(z.null),
+});
+const updateCourseSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  price: z.number(),
+  imageUrl: z.string(),
+  _id: z.string().or(z.null),
 });
 
 router.post("/signup", async (req, res) => {
@@ -64,9 +80,50 @@ router.post("/signin", async (req, res) => {
   }
 });
 
-router.post("/course", adminAuth, (req, res) => {});
-router.put("/course", adminAuth, (req, res) => {});
-router.get("/course/bulk", adminAuth, (req, res) => {});
+router.post("/course", adminAuth, async (req, res) => {
+  const adminId = req.adminId;
+  const coursedata = createCourseSchema.parse(req.body);
+  coursedata.creatorId = adminId;
+  CourseModel.create(coursedata)
+    .then((course) => {
+      res.status(200).json({
+        message: "Successfully created the course",
+        course: course._id,
+      });
+    })
+    .catch((e) => {
+      res.status(400).json({ message: e });
+    });
+});
+
+router.put("/course", adminAuth, (req, res) => {
+  const adminId = req.adminId;
+  const coursedata = updateCourseSchema.parse(req.body);
+  console.log(coursedata);
+  CourseModel.updateOne(
+    { creatorId: adminId, _id: coursedata._id },
+    { $set: coursedata }
+  )
+    .then((course) => {
+      res
+        .status(200)
+        .json({ message: "Successfully updated the course", course });
+    })
+    .catch((e) => {
+      res.status(400).json({ message: e });
+    });
+});
+
+router.get("/course/bulk", adminAuth, async (req, res) => {
+  const adminId = req.adminId;
+  const courses = await CourseModel.find({ creatorId: adminId })
+    .then((courses) => {
+      res.status(200).json(courses);
+    })
+    .catch((e) => {
+      res.status(400).json({ message: e });
+    });
+});
 
 router.get("/about", adminAuth, async (req, res) => {
   let about = await AdminModel.findOne({ _id: req.userId });
